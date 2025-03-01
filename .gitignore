@@ -8,3 +8,11 @@ wheels/
 
 # Virtual environments
 .venv
+
+scotland-latest.osm.pbf
+osmosis-0.49.2.tar.gz
+filtered.osm.pbf
+filtered.osm
+scotland-latest.osm
+/gee
+uk_sentinel2_mosaic.tif
