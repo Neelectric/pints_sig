@@ -84,7 +84,7 @@ class UNetSR(nn.Module):
         e2 = self.enc2(e1)  # 250 -> 125
         b = self.bottleneck(e2)  # 125 -> 125 (No downsampling here)
 
-        #Second we downconv our high res satellite data
+        #Second we downconv our high res lidar data
         ey1 = self.enc1y(y)
         e2y = self.enc2y(ey1)
         by = self.bottlenecky(e2y)
@@ -103,7 +103,7 @@ class UNetSR(nn.Module):
 
 
 # --- Training Function ---
-def train_model(model, dataloader, epochs=10, lr=1e-4):
+def train_model(model, dataloader, epochs=10, lr=1):
     """
     Train the UNet model for super-resolution.
     """
@@ -116,7 +116,7 @@ def train_model(model, dataloader, epochs=10, lr=1e-4):
         for lr_imgs, hr_imgs, hr_lidar in dataloader:
 
             output = model(lr_imgs,hr_lidar)  # Forward pass
-            loss = criterion(output, hr_imgs)  # Compute loss
+            loss = criterion(output, hr_imgs)
 
             optimizer.zero_grad()
             loss.backward()
@@ -137,12 +137,13 @@ if __name__ == "__main__":
     # print("Output shape:", output.shape)  # Expected: (1, 3, 1000, 1000)
 
     # Example dataset (replace with real images)
-    low_res_images = [torch.randn(3, 500, 500) for _ in range(5)]
-    high_res_images = [torch.randn(3, 5000, 5000) for _ in range(5)]
-    high_res_lidar = [torch.randn(1, 5000, 5000) for _ in range(5)]
+
+    high_res_images = [torch.ones(3, 5000, 5000) for _ in range(10)]
+    low_res_images = [tensor[:,::10, ::10] for tensor in high_res_images]
+    high_res_lidar = [torch.randn(1, 5000, 5000) for _ in range(10)]
 
     dataset = SuperResolutionDataset(low_res_images, high_res_images, high_res_lidar, transform=None)
-    dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
 
     model = UNetSR()
     trained_model = train_model(model, dataloader, epochs=10)
