@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Pints Sig!</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <style>
     /* Basic Reset */
     * {
@@ -97,7 +98,8 @@
 </head>
 <body>
   <header>
-    <h1>Pints Sig!</h1>
+    <img src="{{ url_for('static', filename='logo.svg') }}" alt="Pints SIG Logo" width="400" height="auto">
+    <img src="{{ url_for('static', filename='looping_jumping_tuna.gif') }}" alt="Jumping Tuna" width="200">  
   </header>
 
   <main>
@@ -115,3 +117,4 @@
   </footer>
 </body>
 </html>
+
