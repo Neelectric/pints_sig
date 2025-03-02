@@ -30,14 +30,17 @@ class Autoencoder(nn.Module):
             nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),  # (128, 125, 125)
             nn.ReLU(),
             nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),  # (256, 63, 63)
+            #nn.Conv2d(128, 4, kernel_size=3, stride=2, padding=1),  # (256, 63, 63)
             nn.ReLU(),
         )
 
         # Bottleneck fully connected layer
         self.bottleneck = nn.Linear(256 * 63 * 63, 1024)
+        #self.bottleneck = nn.Linear(4 * 63 * 63, 4)
 
         # Decoder: Upsampling with Transposed Conv layers
         self.decoder_fc = nn.Linear(1024, 256 * 125 * 125)
+        #self.decoder_fc = nn.Linear(4, 256 * 125 * 125)
 
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1),  # (128, 250, 250)
@@ -52,12 +55,12 @@ class Autoencoder(nn.Module):
     def forward(self, x):
         # Encode
         x = self.encoder(x)
-        x = torch.flatten(x, start_dim=1)
+        x = torch.flatten(x)
         x = self.bottleneck(x)
 
         # Decode
         x = self.decoder_fc(x)
-        x = x.view(x.shape[0], 256, 125, 125)
+        x = x.view(256, 125, 125)
         x = self.decoder(x)
         
         return x  # Raw logits, ready for CrossEntropyLoss
