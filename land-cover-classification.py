@@ -35,22 +35,38 @@ torch.cuda.manual_seed_all(42)
 np.random.seed(42)
 
 # Configuration
-class Config:
+class BigConfig:
     model_name = "vit_large_patch14_clip_336"  # Using ViT-Large with larger patch size and resolution
     img_size = 336  # Increased image size for better performance
-    batch_size = 4  # Smaller batch size to handle larger images
-    num_workers = 8  # Using 32 processes as requested
+    batch_size = 2 # Smaller batch size to handle larger images
+    num_workers = 8 # Using 32 processes as requested
     num_epochs = 3    # Using 3 epochs as requested
     learning_rate = 1e-4
     weight_decay = 0.05
-    warmup_steps = 1000
+    warmup_steps = 100
     mixed_precision = True  # Use mixed precision training for efficiency
-    gradient_accumulation_steps = 4  # Increased to compensate for smaller batch size
-    prefetch_factor = 4  # Speed up data loading
+    gradient_accumulation_steps = 1  # Increased to compensate for smaller batch size
+    prefetch_factor = 4 # Speed up data loading
     pin_memory = True  # Faster data transfer to GPU
     persistent_workers = True  # Keep workers alive between epochs
+
+# Configuration
+class SmallConfig:
+    model_name = "vit_large_patch14_clip_336"  # Using ViT-Large with larger patch size and resolution
+    img_size = 336  # Increased image size for better performance
+    batch_size = 2 # Smaller batch size to handle larger images
+    num_workers = 0  # Using 32 processes as requested
+    num_epochs = 3    # Using 3 epochs as requested
+    learning_rate = 1e-4
+    weight_decay = 0.05
+    warmup_steps = 100
+    mixed_precision = True  # Use mixed precision training for efficiency
+    gradient_accumulation_steps = 1  # Increased to compensate for smaller batch size
+    prefetch_factor = None # Speed up data loading
+    pin_memory = False  # Faster data transfer to GPU
+    persistent_workers = False  # Keep workers alive between epochs
     
-config = Config()
+config = SmallConfig()
 
 # Data Preparation
 # More robust data transforms
@@ -120,7 +136,14 @@ class UKLandcoverDataset(torch.utils.data.Dataset):
         # Print a few samples to understand the structure
         print("Sample label structure examples:")
         for i in range(min(5, len(self.dataset))):
-            print(f"Example {i}: {self.dataset[i]['label']} -> {get_label(self.dataset[i])}")
+            # Convert i to int before using as an index
+            i_int = int(i)
+            try:
+                # Ensure we use integer index here, not numpy.int64
+                sample_item = self.dataset[i_int]
+                print(f"Example {i_int}: {sample_item['label']} -> {get_label(sample_item)}")
+            except Exception as e:
+                print(f"Error accessing sample at index {i_int}: {e}")
         
         # Get all unique labels as strings to ensure hashability
         sample_size = min(1000, len(self.dataset))
@@ -130,10 +153,12 @@ class UKLandcoverDataset(torch.utils.data.Dataset):
         # Extract labels and explicitly ensure they're hashable by converting to strings
         for i in sample_indices:
             try:
-                extracted_label = get_label(self.dataset[i])
+                # Convert numpy.int64 to Python int
+                i_int = int(i)
+                extracted_label = get_label(self.dataset[i_int])
                 sample_labels.append(extracted_label)
             except Exception as e:
-                print(f"Error processing label at index {i}: {e}")
+                print(f"Error processing label at index {i_int}: {e}")
                 sample_labels.append("error")
         
         # Create unique class list from string labels
@@ -161,7 +186,7 @@ class UKLandcoverDataset(torch.utils.data.Dataset):
     
     def __getitem__(self, idx):
         # Important fix: convert numpy.int64 to regular int
-        if isinstance(idx, np.int64):
+        if isinstance(idx, np.integer):  # Use np.integer which catches all numpy int types
             idx = int(idx)
             
         # Check if processed image is in cache
@@ -179,7 +204,13 @@ class UKLandcoverDataset(torch.utils.data.Dataset):
             return cached_data
         
         # If not in cache, process normally
-        item = self.dataset[idx]
+        try:
+            item = self.dataset[idx]  # Access with integer index
+        except Exception as e:
+            print(f"Error accessing dataset with index {idx} (type: {type(idx)}): {e}")
+            # Create a dummy item
+            item = {'image': None, 'label': 'error'}
+            
         result = {}
         
         # Handle image data with more robust type checking and caching
@@ -319,12 +350,12 @@ try:
         
         if 'train' in dataset_keys and 'validation' in dataset_keys:
             print("Using existing train/validation split")
-            train_dataset = dataset['train']
-            val_dataset = dataset['validation']
+            train_dataset = UKLandcoverDataset(dataset, transform=train_transform, split='train')
+            val_dataset = UKLandcoverDataset(dataset, transform=val_transform, split='validation')
         elif 'train' in dataset_keys and 'test' in dataset_keys:
             print("Using existing train/test split")
-            train_dataset = dataset['train']
-            val_dataset = dataset['test']
+            train_dataset = UKLandcoverDataset(dataset, transform=train_transform, split='train')
+            val_dataset = UKLandcoverDataset(dataset, transform=val_transform, split='test')
         else:
             raise ValueError("Dataset has keys but no train/val splits")
     else:
@@ -336,12 +367,12 @@ try:
         
         if has_train and has_validation:
             print("Using train/validation attributes")
-            train_dataset = dataset.train
-            val_dataset = dataset.validation
+            train_dataset = UKLandcoverDataset(dataset.train, transform=train_transform)
+            val_dataset = UKLandcoverDataset(dataset.validation, transform=val_transform)
         elif has_train and has_test:
             print("Using train/test attributes")
-            train_dataset = dataset.train
-            val_dataset = dataset.test
+            train_dataset = UKLandcoverDataset(dataset.train, transform=train_transform)
+            val_dataset = UKLandcoverDataset(dataset.test, transform=val_transform)
         else:
             # If no splits found, create a custom split
             raise ValueError("No valid splits found as attributes")
@@ -358,10 +389,11 @@ except Exception as e:
     np.random.seed(42)
     np.random.shuffle(indices)
     
-    train_indices = indices[:train_size]
-    val_indices = indices[train_size:]
+    # Convert all indices to regular Python ints
+    train_indices = [int(i) for i in indices[:train_size]]
+    val_indices = [int(i) for i in indices[train_size:]]
     
-    # Create the subsets and copy attributes from the temp_dataset
+    # Create the subsets with custom wrapper
     train_dataset = SubsetWithTransform(dataset, train_indices, transform=train_transform)
     val_dataset = SubsetWithTransform(dataset, val_indices, transform=val_transform)
     
@@ -423,6 +455,7 @@ class ViTForLandcover(nn.Module):
                 nn.Linear(64, 256)
             )
             self.classifier = nn.Linear(in_features + 256, num_classes)
+        self.model.to(torch.device('cuda:0'))
         
     def forward(self, images, coords=None):
         if self.use_coords and coords is not None:
@@ -456,6 +489,7 @@ if torch.cuda.device_count() > 0:
 
 # Use DataParallel if multiple GPUs are available
 model = model.cuda()
+model = model.to(torch.device('cuda:0'))
 if torch.cuda.device_count() > 1:
     print(f"Using DataParallel across {torch.cuda.device_count()} GPUs")
     model = nn.DataParallel(model)
@@ -507,23 +541,21 @@ def train_epoch(model, loader, optimizer, criterion, scheduler, scaler, epoch):
         try:
             # Get data from batch with error handling
             try:
-                images = batch['image'].cuda()
-                labels = batch['label'].cuda()
-                coords = batch.get('coords', None)
-                if coords is not None:
-                    coords = coords.cuda()
+                images = torch.tensor(batch['image']).cuda()
+                labels = torch.tensor(batch['label']).cuda()
             except Exception as e:
                 failed_batches += 1
                 if i % 50 == 0:
-                    print(f"Batch {i} error: {str(e)[:50]}")
+                    print(f"Batch {i} error: {str(e)}")
                 continue  # Skip this batch
             
             # Mixed precision training
             if scaler is not None:
-                with torch.cuda.amp.autocast():
-                    outputs = model(images, coords) if coords is not None else model(images)
+                with torch.amp.autocast('cuda'):
+                    outputs = model(images)
                     loss = criterion(outputs, labels)
                     loss = loss / config.gradient_accumulation_steps
+                    print(f"Loss: {loss.item()}")
                 
                 # Use scaler for gradient scaling
                 scaler.scale(loss).backward()
@@ -534,7 +566,7 @@ def train_epoch(model, loader, optimizer, criterion, scheduler, scaler, epoch):
                     optimizer.zero_grad()
                     scheduler.step()
             else:
-                outputs = model(images, coords) if coords is not None else model(images)
+                outputs = model(images)
                 loss = criterion(outputs, labels)
                 loss = loss / config.gradient_accumulation_steps
                 
@@ -554,7 +586,7 @@ def train_epoch(model, loader, optimizer, criterion, scheduler, scaler, epoch):
             
         except Exception as e:
             failed_batches += 1
-            if i % 50 == 0:
+            if i % 2 == 0:
                 print(f"Train error batch {i}: {str(e)[:50]}")
             continue
     

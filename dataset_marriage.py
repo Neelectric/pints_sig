@@ -199,8 +199,8 @@ class UKLandCoverDataset(Dataset):
                 image = self.transform(image)
             
             return {
-                'image': image.astype(np.float32),  # Ensure correct dtype
-                'label': label,
+                'image': torch.tensor(image, dtype=torch.float32),  # Convert to PyTorch tensor
+                'label': torch.tensor(label, dtype=torch.int64),    # Convert to PyTorch tensor
                 'coordinates': {'longitude': lon, 'latitude': lat},
                 'filename': filename
             }
@@ -273,10 +273,10 @@ def create_huggingface_dataset(uk_dataset, sample_count=None, output_path=None, 
                                (sample.get('coordinates', {}).get('longitude', 0) == 0.0 and 
                                 sample.get('coordinates', {}).get('latitude', 0) == 0.0) and
                                 # "label" is a dummy array of zeros
-                                np.all(sample.get('label', np.zeros((1154, 718), dtype=np.int64)) == 0)
+                                torch.all(sample.get('label', torch.zeros((1154, 718), dtype=torch.int64)) == 0)
                                 )
                 # also make sure that sample['label'] is not all zeros
-                if np.all(sample.get('label', np.zeros((1154, 718), dtype=np.int64)) == 0):
+                if torch.all(sample.get('label', torch.zeros((1154, 718), dtype=torch.int64)) == 0):
                     is_valid = False
                 
                 data_dict['image'].append(sample['image'])
