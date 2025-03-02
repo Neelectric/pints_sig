@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 import sys
+from tqdm.auto import tqdm
 
 # Path to your .tif file
 tif_2017 = "2017_LU_data/gb2017lcm20m.tif"
@@ -20,7 +21,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 class Autoencoder(nn.Module):
-    def __init__(self):
+    def __init__(self, bottleneck_in=256, bottleneck_out=1024):
         super(Autoencoder, self).__init__()
 
         # Encoder: Downsampling with Conv layers
@@ -29,17 +30,17 @@ class Autoencoder(nn.Module):
             nn.ReLU(),
             nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),  # (128, 125, 125)
             nn.ReLU(),
-            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),  # (256, 63, 63)
+            nn.Conv2d(128, bottleneck_in, kernel_size=3, stride=2, padding=1),  # (256, 63, 63)
             #nn.Conv2d(128, 4, kernel_size=3, stride=2, padding=1),  # (256, 63, 63)
             nn.ReLU(),
         )
 
         # Bottleneck fully connected layer
-        self.bottleneck = nn.Linear(256 * 63 * 63, 1024)
+        self.bottleneck = nn.Linear(bottleneck_in * 63 * 63, bottleneck_out)
         #self.bottleneck = nn.Linear(4 * 63 * 63, 4)
 
         # Decoder: Upsampling with Transposed Conv layers
-        self.decoder_fc = nn.Linear(1024, 256 * 125 * 125)
+        self.decoder_fc = nn.Linear(bottleneck_out, 256 * 125 * 125)
         #self.decoder_fc = nn.Linear(4, 256 * 125 * 125)
 
         self.decoder = nn.Sequential(
@@ -55,7 +56,9 @@ class Autoencoder(nn.Module):
     def forward(self, x):
         # Encode
         x = self.encoder(x)
+        #print(x.shape)
         x = torch.flatten(x)
+        #print(x.shape)
         x = self.bottleneck(x)
 
         # Decode
@@ -106,7 +109,7 @@ np.random.seed(1234)
 
 indices = np.random.permutation(9100)
 
-train_indices = indices[:8090]
+train_indices = indices[:809]
 test_indices = indices[8090:]
 
 size = 500
@@ -135,7 +138,7 @@ print("Loading Model")
 
 # Set device (use GPU if available)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = Autoencoder().to(device)
+model = Autoencoder(bottleneck_in=16, bottleneck_out=16).to(device)
 
 print("Model loaded")
 
@@ -151,6 +154,7 @@ def train_autoencoder(model, criterion, optimizer, epochs=10):
 
     for epoch in range(epochs):
         total_loss = 0
+        progress_bar = tqdm(range(len(train_indices)), desc=f"Epoch {epoch+1}/{epochs}", leave=True)
         for index in train_indices:
             image = get_image(index).to(device)
             label = get_label(index).to(device)
@@ -164,6 +168,7 @@ def train_autoencoder(model, criterion, optimizer, epochs=10):
             optimizer.step()
 
             total_loss += loss.item()
+            progress_bar.set_postfix(loss=loss.item())
         print(f"Epoch [{epoch+1}/{epochs}], Loss: {total_loss / len(train_indices):.4f}")
 
 def eval_autoencoder(model, criterion):
