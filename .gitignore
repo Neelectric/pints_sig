@@ -16,4 +16,8 @@ filtered.osm
 scotland-latest.osm
 /gee
 uk_sentinel2_mosaic.tif
-/osm_data
+/osm_data/
+./osm_data/
+/label_cache/
+/uk_landcover_dataset_batch*
+/wandb/
