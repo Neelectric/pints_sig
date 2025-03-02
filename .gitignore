@@ -21,3 +21,4 @@ uk_sentinel2_mosaic.tif
 /label_cache/
 /uk_landcover_dataset_batch*
 /wandb/
+/uk_landcover_dataset/
