@@ -59,7 +59,8 @@ class UNetSR(nn.Module):
         return nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=2, padding=factor//2),
             nn.ReLU(),
-            nn.MaxPool2d(factor)  # Downsampling
+            nn.MaxPool2d(factor),
+            nn.BatchNorm2d(out_channels)# Downsampling
         )
 
     def bottlenecker(self, in_channels, out_channels):
@@ -73,7 +74,8 @@ class UNetSR(nn.Module):
         return nn.Sequential(
             nn.ConvTranspose2d(in_channels, out_channels, kernel_size=scale_factor * 2, stride=scale_factor,
                                padding=scale_factor // 2),
-            nn.ReLU()
+            nn.ReLU(),
+            nn.BatchNorm2d(out_channels)
         )
 
     def forward(self, x,y):
@@ -108,8 +110,9 @@ def downscale(x, scale_factor=10):
 
 def self_supervised_loss(pred_high_res, input_low_res):
     """Encourages the downscaled output to match the input."""
-    pred_low_res = downscale(pred_high_res)  # Downscale predicted high-res image
-    return F.mse_loss(pred_low_res, input_low_res)
+    pred_low_res = downscale(pred_high_res)
+    print(pred_low_res.shape())# Downscale predicted high-res image
+    return F.mse_loss(pred_low_res + 1e-8, input_low_res + 1e-8)
 
 def total_variation_loss(img):
     """Encourages smooth textures in output image."""
@@ -159,11 +162,13 @@ if __name__ == "__main__":
     #high_res_lidar = [torch.randn(1, 5000, 5000) for _ in range(1)]
 
     with rasterio.open(r"C:\Users\mgbsa\Downloads\HackathonData\HackathonData\20230215_SE2B_CGG_GBR_MS4_L3_BGRN.tif") as rbg:
-        tiff_rbg = rbg.read()  # Reads as a NumPy array
+        tiff_rbg = rbg.read()
+        tiff_rbg = tiff_rbg/np.max(tiff_rbg)# Reads as a NumPy array
         low_res_images = [torch.tensor(tiff_rbg).float()]
 
     with rasterio.open(r"C:\Users\mgbsa\Downloads\HackathonData\HackathonData\DSM_TQ0075_P_12757_20230109_20230315.tif") as lid:
         tiff_lidar = lid.read()
+        tiff_lidar = tiff_lidar / np.max(tiff_lidar)
         high_res_lidar = [torch.tensor(tiff_lidar).float()]
 
     dataset = SuperResolutionDataset(low_res_images, high_res_lidar, transform=None)
