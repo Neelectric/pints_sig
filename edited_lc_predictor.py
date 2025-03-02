@@ -69,6 +69,10 @@ test_dataset = LandUseDataset(test_indices, tif_2017, tif_2023)
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
+for data in test_loader:
+    x, y = data
+    print(y.shape)
+
 # Define Autoencoder
 class Autoencoder(nn.Module):
     def __init__(self, bottleneck_dim=1024):
@@ -154,7 +158,30 @@ def eval_autoencoder(model, criterion, test_loader):
 
     print(f"Test Loss: {total_loss / len(test_loader):.4f}")
 
+def eval_autoencoder_acc(model, test_loader):
+    model.eval()
+    correct_pixels = 0
+    total_pixels = 0
+
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images, labels = images.to(device).unsqueeze(1).float(), labels.to(device).long()
+
+            outputs = model(images)
+            outputs = F.interpolate(outputs, size=(1000, 1000), mode='bilinear', align_corners=False)
+
+            # Get predicted class by taking argmax over the 22 output channels
+            predicted = torch.argmax(outputs, dim=1)  # Shape: [batch, 1000, 1000]
+
+            # Compare with ground truth labels
+            correct_pixels += (predicted == labels).sum().item()
+            total_pixels += labels.numel()
+
+    accuracy = 100 * correct_pixels / total_pixels
+    print(f"Test Accuracy: {accuracy:.2f}%")
+
 # Train and evaluate
 print("Starting Training...")
-train_autoencoder(model, criterion, optimizer, train_loader, epochs=10)
-eval_autoencoder(model, criterion, test_loader)
+train_autoencoder(model, criterion, optimizer, train_loader, epochs=3)
+#eval_autoencoder_acc(model, criterion, test_loader)
+eval_autoencoder_acc(model, test_loader)
