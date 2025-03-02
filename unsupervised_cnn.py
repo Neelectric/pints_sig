@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, Dataset
 import numpy as np
 import torch.nn.functional as F
 import rasterio
+import matplotlib.pyplot as plt
 
 # --- Custom Dataset for Super-Resolution ---
 class SuperResolutionDataset(Dataset):
@@ -99,8 +100,7 @@ class UNetSR(nn.Module):
         d2 = self.dec2(d1p)  # 250 -> 500
         d2p = torch.cat((d2, x), dim=1)
         out = self.dec3(d2p)  # 500 -> 5000
-        print(out)
-        return out  # Output in range [0,1]
+        return torch.sigmoid(out)  # Output in range [0,1]
 
 #SOme helper functions
 
@@ -111,7 +111,7 @@ def downscale(x, scale_factor=10):
 def self_supervised_loss(pred_high_res, input_low_res):
     """Encourages the downscaled output to match the input."""
     pred_low_res = downscale(pred_high_res)
-    print(pred_low_res.shape())# Downscale predicted high-res image
+
     return F.mse_loss(pred_low_res + 1e-8, input_low_res + 1e-8)
 
 def total_variation_loss(img):
@@ -139,9 +139,9 @@ def train_model(model, dataloader, epochs=10, lr=1):
         for lr_imgs, hr_lidar in dataloader:
 
             output = model(lr_imgs,hr_lidar)  # Forward pass
-            loss1 = 0;self_supervised_loss(output, lr_imgs)
-            loss2 = 0;total_variation_loss(output)
-            loss3 = lidar_structure_loss(output, hr_lidar)
+            loss1 = self_supervised_loss(output, lr_imgs)
+            loss2 = total_variation_loss(output)
+            loss3 = 0;lidar_structure_loss(output, hr_lidar)
             loss = loss1 + 0.01 * loss2 + 0.1 * loss3
 
             optimizer.zero_grad()
@@ -176,3 +176,8 @@ if __name__ == "__main__":
 
     model = UNetSR()
     trained_model = train_model(model, dataloader, epochs=10)
+    for lr_imgs, hr_lidar in dataloader:
+        new = trained_model.forward(lr_imgs, hr_lidar).detach().numpy().reshape(4,5000,5000)
+        new = np.transpose(new, (1, 2, 0))
+        plt.imshow(new)
+        plt.show()
